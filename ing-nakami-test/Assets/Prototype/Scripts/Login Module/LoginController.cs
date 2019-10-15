@@ -1,18 +1,22 @@
-﻿using UnityEngine;
-using Nakama;
+﻿using Nakama;
 using System;
+using TMPro;
+using UnityEngine;
 
-public class ClientController : MonoBehaviour
+public class LoginController : WindowController
 {
+    public TMP_InputField inputField;
+
     private IClient client = new Client("http", "213.199.132.14", 7350, "defaultkey");
 
-    private string blueSessionToken = "blue.session";
-    private string UdidKey = "udid";
+    private string userSessionToken = string.Empty;
 
-    private async void Awake()
+    public async void Login()
     {
+        userSessionToken = inputField.textComponent.text + ".session";
+
         string deviceId = SystemInfo.deviceUniqueIdentifier;
-        string sessionToken = PlayerPrefs.GetString(blueSessionToken);
+        string sessionToken = PlayerPrefs.GetString((userSessionToken));
         ISession session = Session.Restore(sessionToken);
 
         DateTime expiredDate = DateTime.UtcNow.AddDays(-1);
@@ -20,8 +24,9 @@ public class ClientController : MonoBehaviour
         if (session == null || session.HasExpired(expiredDate))
         {
             session = await client.AuthenticateDeviceAsync(deviceId);
-            PlayerPrefs.SetString(UdidKey, deviceId);
-            PlayerPrefs.SetString(blueSessionToken, session.AuthToken);
+            PlayerPrefs.SetString("udid", deviceId);
+            PlayerPrefs.SetString(userSessionToken, session.AuthToken);
+            PlayerPrefs.SetString("Username", inputField.textComponent.text);
         }
 
         Debug.LogFormat("Session user id: '{0}'", session.UserId);
@@ -31,5 +36,8 @@ public class ClientController : MonoBehaviour
 
         var unixEpoch = new DateTime(1970, 1, 1, 0, 0, 0, 0, DateTimeKind.Utc);
         Debug.LogFormat("Session expires on: '{0}'", unixEpoch.AddSeconds(session.ExpireTime).ToLocalTime());
+
+        inputField.text = string.Empty;
+        Close();
     }
 }
