@@ -5,7 +5,8 @@ using UnityEngine;
 
 public class LoginController : WindowController
 {
-    public TMP_InputField inputField;
+    public TMP_InputField inputFieldUsername;
+    public TMP_InputField inputFieldChannel;
 
     private IClient client = new Client("http", "213.199.132.14", 7350, "defaultkey");
 
@@ -13,15 +14,17 @@ public class LoginController : WindowController
     private ISession session = null;
 
     private StorageModel storage = null;
+    private ChatController chatController = null;
 
     private void Start()
     {
         storage = FindObjectOfType<StorageModel>();
+        chatController = FindObjectOfType<ChatController>();
     }
 
     public async void Login()
     {
-        userSessionToken = inputField.textComponent.text + ".session";
+        userSessionToken = inputFieldUsername.textComponent.text + ".session";
 
         string deviceId = SystemInfo.deviceUniqueIdentifier;
         string sessionToken = PlayerPrefs.GetString((userSessionToken));
@@ -29,11 +32,12 @@ public class LoginController : WindowController
         session = await client.AuthenticateDeviceAsync(deviceId);
         PlayerPrefs.SetString("udid", deviceId);
         PlayerPrefs.SetString(userSessionToken, session.AuthToken);
-        PlayerPrefs.SetString("Username", inputField.text);
+        PlayerPrefs.SetString("Username", inputFieldUsername.text);
 
-        inputField.text = string.Empty;
+        chatController.SetupChatRoom(inputFieldChannel.text);
 
-        storage.FetchStorage();
+        inputFieldUsername.text = string.Empty;
+        inputFieldChannel.text = string.Empty;
     }
 
     public IClient GetClient()
