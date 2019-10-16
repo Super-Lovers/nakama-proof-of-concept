@@ -8,7 +8,8 @@ public class StorageModel : MonoBehaviour
 {
     private List<MessageController> messages = new List<MessageController>();
     private IApiChannelMessageList messagesCollection = null;
-    private MessageController currentMessage = null;
+
+    private string currentMessageContent = string.Empty;
 
     private LoginController loginController = null;
     private ChatController chatController = null;
@@ -24,9 +25,9 @@ public class StorageModel : MonoBehaviour
         return messages;
     }
 
-    public void AddMessage(MessageController message)
+    public void AddMessage(string content)
     {
-        currentMessage = message;
+        currentMessageContent = content;
 
         PushMessage();
     }
@@ -42,7 +43,10 @@ public class StorageModel : MonoBehaviour
 
         messagesCollection = await fetch;
 
-        UpdateView();
+        if (fetch.IsCompleted == true)
+        {
+            UpdateView();
+        }
     }
 
     private async Task<IApiChannelMessageList> FetchMessagesCollection()
@@ -61,7 +65,9 @@ public class StorageModel : MonoBehaviour
 
         foreach (IApiChannelMessage message in messagesCollection.Messages)
         {
-            GameObject messageObj = chatController.InstantiateMessage();
+            GameObject messageObj = Instantiate(
+                chatController.messagePrefab,
+                chatController.messagesContentView);
             MessageController messageController = messageObj.GetComponent<MessageController>();
 
             JsonData messageJsonObj = JsonMapper.ToObject(message.Content);
@@ -107,9 +113,9 @@ public class StorageModel : MonoBehaviour
     public async void PushMessage()
     {
         string content = "{ \"username\":";
-        content += "\"" + currentMessage.GetUsername() + "\",";
+        content += "\"" + PlayerPrefs.GetString("Username") + "\",";
         content += "\"message\":";
-        content += "\"" + currentMessage.GetMessage() + "\"";
+        content += "\"" + currentMessageContent + "\"";
         content += "}";
 
         IChannelMessageAck sendAck = await chatController.GetSocket()

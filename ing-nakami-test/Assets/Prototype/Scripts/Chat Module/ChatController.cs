@@ -1,4 +1,6 @@
-﻿using Nakama;
+﻿using LitJson;
+using Nakama;
+using System.Collections;
 using TMPro;
 using UnityEngine;
 using UnityEngine.UI;
@@ -8,7 +10,8 @@ public class ChatController : MonoBehaviour
     [SerializeField] private TextMeshProUGUI usernameLabel = null;
     [SerializeField] private TextMeshProUGUI channelTitle = null;
     [SerializeField] private TMP_InputField inputMessageField = null;
-    [SerializeField] private GameObject messagePrefab = null;
+
+    public GameObject messagePrefab = null;
     public RectTransform messagesContentView = null;
 
     private StorageModel storage = null;
@@ -25,25 +28,10 @@ public class ChatController : MonoBehaviour
 
     public void SendMessage()
     {
-        GameObject messageObj = InstantiateMessage();
-        MessageController messageController = messageObj.GetComponent<MessageController>();
-
-        messageController.SetUsername(PlayerPrefs.GetString("Username"));
-        messageController.SetMessage(inputMessageField.text);
-
-        storage.AddMessage(messageController);
+        storage.AddMessage(inputMessageField.text);
         RebuildLayout();
 
         inputMessageField.text = string.Empty;
-    }
-
-    public GameObject InstantiateMessage()
-    {
-        GameObject messageObj = Instantiate(messagePrefab, messagesContentView);
-
-        RebuildLayout();
-
-        return messageObj;
     }
 
     public async void SetupChatRoom(string room)
@@ -62,8 +50,31 @@ public class ChatController : MonoBehaviour
 
         socket.ReceivedChannelMessage += message =>
         {
-            storage.FetchStorage();
+            ExecuteInMainThread(message);
         };
+    }
+
+    public IEnumerator InstantiateMessage(IApiChannelMessage message)
+    {
+        GameObject messageObj = Instantiate(messagePrefab);
+        messageObj.transform.SetParent(messagesContentView);
+        MessageController messageController = messageObj.GetComponent<MessageController>();
+
+        JsonData messageJsonObj = JsonMapper.ToObject(message.Content);
+
+        string username = messageJsonObj["username"].ToString();
+        string content = messageJsonObj["message"].ToString();
+
+        messageController.SetUsername(username);
+        messageController.SetMessage(content);
+
+        RebuildLayout();
+        yield return null;
+    }
+
+    public void ExecuteInMainThread(IApiChannelMessage message)
+    {
+        UnityMainThreadDispatcher.Instance().Enqueue(InstantiateMessage(message));
     }
 
     private async void OnApplicationQuit()
