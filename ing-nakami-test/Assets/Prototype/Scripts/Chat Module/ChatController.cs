@@ -9,6 +9,7 @@ public class ChatController : MonoBehaviour
 {
     [SerializeField] private TextMeshProUGUI usernameLabel = null;
     [SerializeField] private TextMeshProUGUI channelTitle = null;
+    [SerializeField] private TextMeshProUGUI regionLabel = null;
     [SerializeField] private TMP_InputField inputMessageField = null;
 
     public GameObject messagePrefab = null;
@@ -16,12 +17,14 @@ public class ChatController : MonoBehaviour
 
     private StorageModel storage = null;
     private LoginController loginController = null;
+    public MatchmakingController matchmakingController = null;
 
     private ISocket socket = null;
     private IChannel channel = null;
 
     private void Start()
     {
+        matchmakingController = FindObjectOfType<MatchmakingController>();
         storage = FindObjectOfType<StorageModel>();
         loginController = FindObjectOfType<LoginController>();
     }
@@ -34,27 +37,32 @@ public class ChatController : MonoBehaviour
         inputMessageField.text = string.Empty;
     }
 
-    public async void SetupChatRoom(string room)
+    public IEnumerator SetupChatRoom(string room)
     {
-        //Debug.Log(loginController.GetClient().NewSocket());
-        socket = loginController.GetClient().NewSocket();
+        socket = loginController.GetSocket();
 
-        socket.Connected += () =>
-        {
-            //Debug.Log("Socket connected!");
-            JoinRoom(room);
-            channelTitle.text = room;
-            usernameLabel.text = PlayerPrefs.GetString("Username");
-        };
-        await socket.ConnectAsync(loginController.GetSession());
+        JoinRoom(room);
+
+        channelTitle.text = room;
+        usernameLabel.text = PlayerPrefs.GetString("Username");
+        regionLabel.text = PlayerPrefs.GetString("Region");
 
         socket.ReceivedChannelMessage += message =>
         {
             ExecuteInMainThread(message);
         };
+        yield return null;
     }
 
     public IEnumerator InstantiateMessage(IApiChannelMessage message)
+    {
+        CreateMessage(message);
+
+        RebuildLayout();
+        yield return null;
+    }
+
+    public void CreateMessage(IApiChannelMessage message)
     {
         GameObject messageObj = Instantiate(messagePrefab);
         messageObj.transform.SetParent(messagesContentView);
@@ -62,14 +70,11 @@ public class ChatController : MonoBehaviour
 
         JsonData messageJsonObj = JsonMapper.ToObject(message.Content);
 
-        string username = messageJsonObj["username"].ToString();
-        string content = messageJsonObj["message"].ToString();
+        string name = messageJsonObj["username"].ToString();
+        string text = messageJsonObj["message"].ToString();
 
-        messageController.SetUsername(username);
-        messageController.SetMessage(content);
-
-        RebuildLayout();
-        yield return null;
+        messageController.SetUsername(name);
+        messageController.SetMessage(text);
     }
 
     public void ExecuteInMainThread(IApiChannelMessage message)
@@ -79,12 +84,15 @@ public class ChatController : MonoBehaviour
 
     private async void OnApplicationQuit()
     {
-        await socket.LeaveChatAsync(channel.Id);
+        if (channel != null)
+        {
+            await socket.LeaveChatAsync(channel.Id);
+        }
     }
 
     public async void JoinRoom(string roomName)
     {
-        channel = await socket.JoinChatAsync(roomName, ChannelType.Room, true, false);
+        channel = await socket.JoinChatAsync(PlayerPrefs.GetString("Region") + roomName, ChannelType.Room, true, false);
 
         if (channel != null)
         {
@@ -95,11 +103,6 @@ public class ChatController : MonoBehaviour
     public IChannel GetChannel()
     {
         return channel;
-    }
-
-    public ISocket GetSocket()
-    {
-        return socket;
     }
 
     public void RebuildLayout()

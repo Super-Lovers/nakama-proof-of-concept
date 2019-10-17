@@ -1,5 +1,6 @@
 ﻿using LitJson;
 using Nakama;
+using System.Collections;
 using System.Collections.Generic;
 using System.Threading.Tasks;
 using UnityEngine;
@@ -20,21 +21,11 @@ public class StorageModel : MonoBehaviour
         chatController = FindObjectOfType<ChatController>();
     }
 
-    public List<MessageController> GetMessages()
-    {
-        return messages;
-    }
-
     public void AddMessage(string content)
     {
         currentMessageContent = content;
 
         PushMessage();
-    }
-
-    public void ClearMessages()
-    {
-        messages.Clear();
     }
 
     public async void FetchStorage()
@@ -45,7 +36,7 @@ public class StorageModel : MonoBehaviour
 
         if (fetch.IsCompleted == true)
         {
-            UpdateView();
+            UnityMainThreadDispatcher.Instance().Enqueue(UpdateView());
         }
     }
 
@@ -58,54 +49,18 @@ public class StorageModel : MonoBehaviour
         return apiChannelMessageList;
     }
 
-    public void UpdateView()
+    public IEnumerator UpdateView()
     {
-        messages.Clear();
         ClearStorageView();
 
         foreach (IApiChannelMessage message in messagesCollection.Messages)
         {
-            GameObject messageObj = Instantiate(
-                chatController.messagePrefab,
-                chatController.messagesContentView);
-            MessageController messageController = messageObj.GetComponent<MessageController>();
-
-            JsonData messageJsonObj = JsonMapper.ToObject(message.Content);
-
-            string username = messageJsonObj["username"].ToString();
-            string content = messageJsonObj["message"].ToString();
-
-            messageController.SetUsername(username);
-            messageController.SetMessage(content);
-
+            chatController.CreateMessage(message);
             chatController.RebuildLayout();
-            messages.Add(messageController);
         }
 
-        //Debug.Log("Message history of channel \"" + chatController.GetChannel().RoomName + "\" has been fetched successfully!");
+        yield return null;
     }
-
-    /*
-    /// <summary>
-    /// Returns a stringified JSON object based on the messages list (storage)
-    /// </summary>
-    /// <returns></returns>
-    private string StringifyMessages()
-    {
-        string result = "{ \"messages\": [";
-        foreach (MessageController message in messages)
-        {
-            result += "{";
-            result += "\"Username\":\"" + message.GetUsername() + "\",";
-            result += "\"Message\":\"" + message.GetMessage() + "\"";
-            result += "},";
-        }
-        result = result.Substring(0, result.Length - 1);
-        result += "]}";
-
-        return result;
-    }
-    */
 
     /// <summary>
     /// Pushes the new storage collection online and updates it in the chat view.
@@ -118,12 +73,9 @@ public class StorageModel : MonoBehaviour
         content += "\"" + currentMessageContent + "\"";
         content += "}";
 
-        IChannelMessageAck sendAck = await chatController.GetSocket()
+        await loginController.GetSocket()
             .WriteChatMessageAsync(chatController.GetChannel().Id, content);
-
-        //Debug.Log(content);
     }
-
 
     private void ClearStorageView()
     {
