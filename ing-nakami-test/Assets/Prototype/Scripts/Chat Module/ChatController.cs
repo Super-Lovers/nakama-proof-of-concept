@@ -49,20 +49,12 @@ public class ChatController : MonoBehaviour
 
         socket.ReceivedChannelMessage += message =>
         {
-            ExecuteInMainThread(message);
+            UnityMainThreadDispatcher.Instance().Enqueue(CreateMessage(message));
         };
         yield return null;
     }
 
-    public IEnumerator InstantiateMessage(IApiChannelMessage message)
-    {
-        CreateMessage(message);
-
-        RebuildLayout();
-        yield return null;
-    }
-
-    public void CreateMessage(IApiChannelMessage message)
+    public IEnumerator CreateMessage(IApiChannelMessage message)
     {
         GameObject messageObj = Instantiate(messagePrefab);
         messageObj.transform.SetParent(messagesContentView);
@@ -75,18 +67,15 @@ public class ChatController : MonoBehaviour
 
         messageController.SetUsername(name);
         messageController.SetMessage(text);
-    }
-
-    public void ExecuteInMainThread(IApiChannelMessage message)
-    {
-        UnityMainThreadDispatcher.Instance().Enqueue(InstantiateMessage(message));
+        RebuildLayout();
+        yield return null;
     }
 
     private async void OnApplicationQuit()
     {
         if (channel != null)
         {
-            await socket.LeaveChatAsync(channel.Id);
+            await socket.CloseAsync();
         }
     }
 

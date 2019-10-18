@@ -1,5 +1,7 @@
 ﻿using Nakama;
+using System.Collections;
 using System.Collections.Generic;
+using System.Threading.Tasks;
 using UnityEngine;
 
 public class MatchmakingController : MonoBehaviour
@@ -16,7 +18,7 @@ public class MatchmakingController : MonoBehaviour
         chatController = FindObjectOfType<ChatController>();
     }
 
-    public async void AddToMatchPartnerPool()
+    public async Task AddToMatchPartnerPool()
     {
         ISocket socket = loginController.GetSocket();
 
@@ -24,40 +26,44 @@ public class MatchmakingController : MonoBehaviour
         //    "+properties.region:" + PlayerPrefs.GetString("Region") + " " +
         //    "properties.room:" + PlayerPrefs.GetString("Channel");
         string query = "*";
-        Dictionary<string, string> stringProperties = new Dictionary<string, string>()
-        {
-            { "region", PlayerPrefs.GetString("Region") },
-            { "room", PlayerPrefs.GetString("Channel") }
-        };
+        //Dictionary<string, string> stringProperties = new Dictionary<string, string>()
+        //{
+        //    { "region", PlayerPrefs.GetString("Region") },
+        //    { "room", PlayerPrefs.GetString("Channel") }
+        //};
 
         matchmakerTicket = await 
-            socket.AddMatchmakerAsync(query, 2, 2, stringProperties);
+            socket.AddMatchmakerAsync(query, 2, 2);
 
-        LoadingScreenView.SetActive(true);
+        UnityMainThreadDispatcher.Instance().Enqueue(ToggleLoadingScreen(true));
         socket.ReceivedMatchmakerMatched += async matched =>
         {
-            string roomProperty = string.Empty;
-            foreach (IMatchmakerUser user in matched.Users)
-            {
-                foreach (KeyValuePair<string, string> pair in user.StringProperties)
-                {
-                    if (pair.Key == "room")
-                    {
-                        roomProperty = pair.Value;
-                        break;
-                    }
-                }
-            }
+            //string roomProperty = string.Empty;
+            //foreach (IMatchmakerUser user in matched.Users)
+            //{
+            //    foreach (KeyValuePair<string, string> pair in user.StringProperties)
+            //    {
+            //        if (pair.Key == "room")
+            //        {
+            //            roomProperty = pair.Value;
+            //            break;
+            //        }
+            //    }
+            //}
 
-            UnityMainThreadDispatcher.Instance().Enqueue(chatController.SetupChatRoom(roomProperty));
-
-            LoadingScreenView.SetActive(false);
-            await socket.JoinMatchAsync(matched.MatchId);
+            UnityMainThreadDispatcher.Instance().Enqueue(chatController.SetupChatRoom(PlayerPrefs.GetString("Channel")));
+            UnityMainThreadDispatcher.Instance().Enqueue(ToggleLoadingScreen(false));
         };
     }
 
     public async void RemoveMatchingFromPool()
     {
         await loginController.GetSocket().RemoveMatchmakerAsync(matchmakerTicket);
+    }
+
+    private IEnumerator ToggleLoadingScreen(bool toggle)
+    {
+        LoadingScreenView.SetActive(toggle);
+        yield return null;
     }
 }

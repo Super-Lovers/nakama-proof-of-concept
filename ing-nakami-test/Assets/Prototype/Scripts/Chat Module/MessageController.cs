@@ -3,8 +3,8 @@ using UnityEngine;
 
 public class MessageController : MonoBehaviour
 {
-    [SerializeField] private TextMeshProUGUI usernameField;
-    [SerializeField] private TextMeshProUGUI textContentField;
+    [SerializeField] private TextMeshProUGUI usernameField = null;
+    [SerializeField] private TextMeshProUGUI textContentField = null;
 
     public void SetUsername(string username)
     {

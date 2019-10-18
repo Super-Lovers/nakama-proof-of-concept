@@ -54,9 +54,9 @@ public class LoginController : WindowController
             PlayerPrefs.GetString("Username"),
             PlayerPrefs.GetString("Username"));
 
-        socket.Connected += () =>
+        socket.Connected += async () =>
         {
-            matchmakingController.AddToMatchPartnerPool();
+            await matchmakingController.AddToMatchPartnerPool();
         };
 
         await socket.ConnectAsync(session);
