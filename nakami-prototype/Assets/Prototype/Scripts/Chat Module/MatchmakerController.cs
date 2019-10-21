@@ -12,25 +12,25 @@ public class MatchmakerController : MonoBehaviour
     private IMatchmakerTicket ticket = null;
     private IMatch match = null;
 
-    private LoginController loginController = null;
-    private ProfileController profileController = null;
+    private LoginModel loginModel = null;
+    private ProfileModel profileModel = null;
     private ChatController chatController = null;
 
     private void Start()
     {
-        loginController = FindObjectOfType<LoginController>();
+        loginModel = FindObjectOfType<LoginModel>();
         chatController = FindObjectOfType<ChatController>();
     }
 
     public async void CreateAccount()
     {
-        profileController = new ProfileController();
-        profileController.Username = loginController.inputFieldUsername.text;
-        profileController.Channel = loginController.inputFieldChannel.text;
-        profileController.Region = loginController.regionField.text;
+        profileModel = new ProfileModel();
+        profileModel.username = loginModel.inputFieldUsername.text;
+        profileModel.channel = loginModel.inputFieldChannel.text;
+        profileModel.region = loginModel.regionField.text;
 
         var deviceId = SystemInfo.deviceUniqueIdentifier;
-        var session = await client.AuthenticateDeviceAsync(deviceId, profileController.Username);
+        var session = await client.AuthenticateDeviceAsync(deviceId, profileModel.username);
 
         socket = client.NewSocket();
 
@@ -43,11 +43,11 @@ public class MatchmakerController : MonoBehaviour
 
             UnityMainThreadDispatcher.Instance().Enqueue(
                 chatController.AssignChatConfiguration(
-                    profileController.Username,
-                    profileController.Channel,
-                    profileController.Region));
+                    profileModel.username,
+                    profileModel.channel,
+                    profileModel.region));
 
-            channel = await socket.JoinChatAsync(profileController.Channel, ChannelType.Room, true, false);
+            channel = await socket.JoinChatAsync(profileModel.channel, ChannelType.Room, true, false);
 
             socket.ReceivedChannelMessage += message =>
             {
@@ -57,25 +57,38 @@ public class MatchmakerController : MonoBehaviour
             self = match.Self;
             connectedOpponents.AddRange(match.Presences);
         };
+
         socket.ReceivedMatchPresence += presenceEvent =>
         {
             foreach (var presence in presenceEvent.Leaves)
             {
+                UnityMainThreadDispatcher.Instance()
+                    .Enqueue(chatController.CreateNotification(
+                    string.Format("{0} has left the chat!", presence.Username)));
+
                 connectedOpponents.Remove(presence);
             }
             connectedOpponents.AddRange(presenceEvent.Joins);
             connectedOpponents.Remove(self);
         };
+
+        socket.Closed += () =>
+        {
+            UnityMainThreadDispatcher.Instance()
+                .Enqueue(chatController.CreateNotification(
+                string.Format("{0} has lost connection with the server!", profileModel.username)));
+        };
+
         await socket.ConnectAsync(session);
         UnityMainThreadDispatcher.Instance().Enqueue(ToggleGameObject(LoadingView, true));
 
         string query =
-        "+properties.region:" + profileController.Region + " " +
-        "+properties.channel:" + profileController.Channel;
+        "+properties.region:" + profileModel.region + " " +
+        "+properties.channel:" + profileModel.channel;
         Dictionary<string, string> stringProperties = new Dictionary<string, string>()
         {
-            { "region", profileController.Region },
-            { "channel", profileController.Channel }
+            { "region", profileModel.region },
+            { "channel", profileModel.channel }
         };
 
         ticket = await socket.AddMatchmakerAsync(query, 2, 2, stringProperties);

@@ -224,6 +224,11 @@ PrefabInstance:
       propertyPath: m_Name
       value: Login View
       objectReference: {fileID: 0}
+    - target: {fileID: 7616532190196093468, guid: 3a4558f866b377542b632cfbebb0c1ae,
+        type: 3}
+      propertyPath: m_IsActive
+      value: 1
+      objectReference: {fileID: 0}
     - target: {fileID: 7616532190196093469, guid: 3a4558f866b377542b632cfbebb0c1ae,
         type: 3}
       propertyPath: m_LocalPosition.x
@@ -1108,6 +1113,11 @@ PrefabInstance:
         type: 3}
       propertyPath: m_textInfo.pageCount
       value: 0
+      objectReference: {fileID: 0}
+    - target: {fileID: 3505084729876969549, guid: af15108ff2e3f484699dc9c3efe9f8b3,
+        type: 3}
+      propertyPath: m_IsActive
+      value: 1
       objectReference: {fileID: 0}
     m_RemovedComponents:
     - {fileID: 1269652914065507507, guid: af15108ff2e3f484699dc9c3efe9f8b3, type: 3}

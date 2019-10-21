@@ -832,6 +832,8 @@ MonoBehaviour:
   inputMessageField: {fileID: 8693970014583517464}
   messagePrefab: {fileID: 523422041400789347, guid: 3a5dac7fbb213ff488d734026c39383a,
     type: 3}
+  notificationPrefab: {fileID: 523422041400789347, guid: ddd3ef09bc249454ba5d05beadffe3a2,
+    type: 3}
   messagesContentView: {fileID: 3505084729876969550}
 --- !u!1 &3505084730807897148
 GameObject:

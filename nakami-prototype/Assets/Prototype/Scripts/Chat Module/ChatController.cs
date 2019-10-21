@@ -13,6 +13,7 @@ public class ChatController : MonoBehaviour
     [SerializeField] private TMP_InputField inputMessageField = null;
 
     public GameObject messagePrefab = null;
+    public GameObject notificationPrefab = null;
     public RectTransform messagesContentView = null;
 
     public IEnumerator AssignChatConfiguration(
@@ -43,9 +44,6 @@ public class ChatController : MonoBehaviour
         LayoutRebuilder.ForceRebuildLayoutImmediate(messagesContentView);
     }
 
-    /// <summary>
-    /// Pushes the new storage collection online and updates it in the chat view.
-    /// </summary>
     public async void PushMessage(string username, string messageContent)
     {
         string content = "{ \"username\":";
@@ -71,6 +69,17 @@ public class ChatController : MonoBehaviour
 
         messageController.SetUsername(name);
         messageController.SetMessage(text);
+        RebuildLayout();
+        yield return null;
+    }
+
+    public IEnumerator CreateNotification(string message)
+    {
+        GameObject messageObj = Instantiate(notificationPrefab);
+        messageObj.transform.SetParent(messagesContentView);
+        MessageController messageController = messageObj.GetComponent<MessageController>();
+
+        messageController.SetMessage(message);
         RebuildLayout();
         yield return null;
     }
