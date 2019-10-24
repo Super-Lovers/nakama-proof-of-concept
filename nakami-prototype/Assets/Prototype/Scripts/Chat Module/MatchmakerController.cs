@@ -10,7 +10,7 @@ public class MatchmakerController : MonoBehaviour
     private readonly IClient client = new Client("http", "213.199.132.14", 7350, "defaultkey");
     public static ISocket socket;
     private string deviceId;
-    private ISession session;
+    public ISession session;
     public static IChannel channel;
     private IMatchmakerTicket ticket = null;
     private IMatch match = null;
@@ -40,13 +40,13 @@ public class MatchmakerController : MonoBehaviour
                 Debug.Log(socket);
                 if (isInternetStatusUpdated == true)
                 {
-                    chatController.ClearChatroomView();
                     Debug.Log("Connection to server returned");
 
                     channel = await socket.JoinChatAsync(profileModel.channel, ChannelType.Room, true, false);
 
                     UnityMainThreadDispatcher.Instance().Enqueue(ToggleGameObject(LostInternetView, false));
 
+                    chatController.ClearChatroomView();
                     chatController.SendUnreceivedMessages();
 
                     isInternetStatusUpdated = false;
@@ -103,9 +103,11 @@ public class MatchmakerController : MonoBehaviour
 
             channel = await socket.JoinChatAsync(profileModel.channel, ChannelType.Room, true, false);
 
-            UnityMainThreadDispatcher.Instance()
-                .Enqueue(chatController.CreateNotification(
-                string.Format("{0} has joined the chat!", matched.Self.Presence.Username)));
+            //UnityMainThreadDispatcher.Instance()
+            //    .Enqueue(chatController.CreateNotification(
+            //    string.Format("{0} has joined the chat!", matched.Self.Presence.Username)));
+
+            chatController.FetchChatHistory();
         };
 
         socket.ReceivedChannelMessage += message =>
@@ -115,12 +117,13 @@ public class MatchmakerController : MonoBehaviour
 
         socket.Closed += () =>
         {
-            UnityMainThreadDispatcher.Instance()
-                .Enqueue(chatController.CreateNotification(
-                string.Format("{0} has lost connection with the server!", profileModel.username)));
+            //UnityMainThreadDispatcher.Instance()
+            //    .Enqueue(chatController.CreateNotification(
+            //    string.Format("{0} has lost connection with the server!", profileModel.username)));
 
             UnityMainThreadDispatcher.Instance().Enqueue(ToggleGameObject(LostInternetView, true));
 
+            chatController.isChatHistoryFetched = false;
             isInternetAvailable = false;
             isInternetStatusUpdated = true;
             isConnecting = false;
@@ -130,15 +133,10 @@ public class MatchmakerController : MonoBehaviour
         {
             foreach (var presence in presenceEvent.Leaves)
             {
-                UnityMainThreadDispatcher.Instance()
-                    .Enqueue(chatController.CreateNotification(
-                    string.Format("{0} has left the chat!", presence.Username)));
+                //UnityMainThreadDispatcher.Instance()
+                //    .Enqueue(chatController.CreateNotification(
+                //    string.Format("{0} has left the chat!", presence.Username)));
             }
-        };
-
-        socket.ReceivedChannelPresence += presence =>
-        {
-            Debug.Log("joined chat!");
         };
 
         socket.Connected += () =>
@@ -213,5 +211,15 @@ public class MatchmakerController : MonoBehaviour
     public IChannel GetChannel()
     {
         return channel;
+    }
+
+    public IClient GetClient()
+    {
+        return client;
+    }
+
+    public ISession GetSession()
+    {
+        return session;
     }
 }

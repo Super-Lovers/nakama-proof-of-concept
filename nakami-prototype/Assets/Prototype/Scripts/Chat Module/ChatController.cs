@@ -18,6 +18,7 @@ public class ChatController : MonoBehaviour
     public RectTransform messagesContentView = null;
 
     private bool isStorageDataRestored = true;
+    public bool isChatHistoryFetched = false;
     private MatchmakerController matchController = null;
     List<(string, string, bool)> unreceivedMessages = new List<(string, string, bool)>();
 
@@ -47,9 +48,12 @@ public class ChatController : MonoBehaviour
             messages.Add(messagesContentView.transform.GetChild(i).gameObject);
         }
 
-        foreach (GameObject message in messages)
+        if (messages.Count > 0)
         {
-            UnityMainThreadDispatcher.Instance().Enqueue(DestroyCo(message));
+            foreach (GameObject message in messages)
+            {
+                UnityMainThreadDispatcher.Instance().Enqueue(DestroyCo(message));
+            }
         }
     }
 
@@ -61,14 +65,21 @@ public class ChatController : MonoBehaviour
 
     public void SendUnreceivedMessages()
     {
-        inputMessageField.text = string.Empty;
-        foreach (var messageTuple in unreceivedMessages)
+        if (isChatHistoryFetched == false)
         {
-            PushMessage(messageTuple.Item1, messageTuple.Item2);
-        }
+            inputMessageField.text = string.Empty;
+            foreach (var messageTuple in unreceivedMessages)
+            {
+                PushMessage(messageTuple.Item1, messageTuple.Item2);
+            }
 
-        unreceivedMessages.Clear();
-        isStorageDataRestored = true;
+            ClearChatroomView();
+            FetchChatHistory();
+
+            unreceivedMessages.Clear();
+            isStorageDataRestored = true;
+            isChatHistoryFetched = true;
+        }
     }
 
     public void SendMessage()
@@ -94,6 +105,7 @@ public class ChatController : MonoBehaviour
             var messageTuple = (usernameLabel.text, inputMessageField.text, false);
             unreceivedMessages.Add(messageTuple);
             UnityMainThreadDispatcher.Instance().Enqueue(CreateMessage(messageTuple.Item1, messageTuple.Item2));
+            inputMessageField.text = string.Empty;
             Debug.Log("message sent with net off");
         }
     }
@@ -105,6 +117,16 @@ public class ChatController : MonoBehaviour
         LayoutRebuilder.ForceRebuildLayoutImmediate(messagesContentView);
         LayoutRebuilder.ForceRebuildLayoutImmediate(messagesContentView);
         LayoutRebuilder.ForceRebuildLayoutImmediate(messagesContentView);
+    }
+
+    public async void FetchChatHistory()
+    {
+        var history = await matchController.GetClient().ListChannelMessagesAsync(matchController.GetSession(), matchController.GetChannel().Id, 100, true);
+
+        foreach (IApiChannelMessage message in history.Messages)
+        {
+            UnityMainThreadDispatcher.Instance().Enqueue(CreateMessage(message));
+        }
     }
 
     public async void PushMessage(string username, string messageContent)
