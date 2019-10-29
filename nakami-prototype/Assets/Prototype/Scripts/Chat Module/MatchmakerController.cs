@@ -5,6 +5,7 @@ using UnityEngine;
 
 public class MatchmakerController : MonoBehaviour
 {
+    public bool DebugMode = true;
     public GameObject LoadingView = null;
     public GameObject LostInternetView = null;
     private readonly IClient client = new Client("http", "213.199.132.14", 7350, "defaultkey");
@@ -19,8 +20,8 @@ public class MatchmakerController : MonoBehaviour
     public ProfileModel profileModel = null;
     private ChatController chatController = null;
 
-    private int secondsToPing = 1;
-    private float currentTime = 0;
+    private int delayBetweenPings = 1;
+    private float stopwatch = 0;
     private bool isInternetAvailable = true;
     private bool isInternetStatusUpdated = false;
     private bool isConnecting = false;
@@ -37,17 +38,19 @@ public class MatchmakerController : MonoBehaviour
         {
             if (socket.IsConnected == true)
             {
-                Debug.Log(socket);
                 if (isInternetStatusUpdated == true)
                 {
-                    Debug.Log("Connection to server returned");
+                    if (DebugMode == true)
+                    {
+                        Debug.Log("Connection to server returned");
+                    }
 
                     channel = await socket.JoinChatAsync(profileModel.channel, ChannelType.Room, true, false);
 
-                    UnityMainThreadDispatcher.Instance().Enqueue(ToggleGameObject(LostInternetView, false));
+                    ExecuteInMainThreadCo(ToggleGameObject(LostInternetView, false));
 
                     chatController.ClearChatroomView();
-                    chatController.SendUnreceivedMessages();
+                    chatController.PushUnreceivedMessages();
 
                     isInternetStatusUpdated = false;
                 }
@@ -56,17 +59,23 @@ public class MatchmakerController : MonoBehaviour
             }
             else if (socket.IsConnected == false)
             {
-                if (currentTime < secondsToPing)
+                if (stopwatch < delayBetweenPings)
                 {
-                    currentTime += Time.deltaTime;
+                    stopwatch += Time.deltaTime;
                     isInternetAvailable = false;
-                    Debug.Log("Too early to ping server.");
+                    if (DebugMode == true)
+                    {
+                        Debug.Log("Too early to ping server.");
+                    }
                 }
-                else if (currentTime >= secondsToPing && isConnecting == false)
+                else if (stopwatch >= delayBetweenPings && isConnecting == false)
                 {
-                    Debug.Log("Creating account");
+                    if (DebugMode == true)
+                    {
+                        Debug.Log("Creating account");
+                    }
                     CreateAccount();
-                    currentTime = 0;
+                    stopwatch = 0;
                 }
             }
         }
@@ -86,71 +95,64 @@ public class MatchmakerController : MonoBehaviour
         session = await client.AuthenticateCustomAsync(deviceId, profileModel.username, false);
 
         socket = client.NewSocket();
+        await socket.ConnectAsync(session);
 
-        socket.ReceivedMatchmakerMatched += async matched =>
-        {
-            match = await socket.JoinMatchAsync(matched);
-            if (isInternetAvailable == true)
-            {
-                UnityMainThreadDispatcher.Instance().Enqueue(ToggleGameObject(LoadingView, false));
-            }
-
-            UnityMainThreadDispatcher.Instance().Enqueue(
-                chatController.AssignChatConfiguration(
-                    profileModel.username,
-                    profileModel.channel,
-                    profileModel.region));
-
-            channel = await socket.JoinChatAsync(profileModel.channel, ChannelType.Room, true, false);
-
-            //UnityMainThreadDispatcher.Instance()
-            //    .Enqueue(chatController.CreateNotification(
-            //    string.Format("{0} has joined the chat!", matched.Self.Presence.Username)));
-
-            chatController.FetchChatHistory();
-        };
+        socket.ReceivedMatchmakerMatched += Matchmaked;
 
         socket.ReceivedChannelMessage += message =>
         {
-            UnityMainThreadDispatcher.Instance().Enqueue(chatController.CreateMessage(message));
+            ExecuteInMainThreadCo(chatController.CreateMessage(message));
         };
 
-        socket.Closed += () =>
-        {
-            //UnityMainThreadDispatcher.Instance()
-            //    .Enqueue(chatController.CreateNotification(
-            //    string.Format("{0} has lost connection with the server!", profileModel.username)));
-
-            UnityMainThreadDispatcher.Instance().Enqueue(ToggleGameObject(LostInternetView, true));
-
-            chatController.isChatHistoryFetched = false;
-            isInternetAvailable = false;
-            isInternetStatusUpdated = true;
-            isConnecting = false;
-        };
-
-        socket.ReceivedChannelPresence += presenceEvent =>
-        {
-            foreach (var presence in presenceEvent.Leaves)
-            {
-                //UnityMainThreadDispatcher.Instance()
-                //    .Enqueue(chatController.CreateNotification(
-                //    string.Format("{0} has left the chat!", presence.Username)));
-            }
-        };
-
-        socket.Connected += () =>
-        {
-            chatController.ClearChatroomView();
-        };
-
-        await socket.ConnectAsync(session);
+        socket.Closed += SocketClosed;
+        socket.Connected += SocketConnected;
 
         if (isInternetAvailable == true)
         {
-            UnityMainThreadDispatcher.Instance().Enqueue(ToggleGameObject(LoadingView, true));
+            ExecuteInMainThreadCo(ToggleGameObject(LoadingView, true));
         }
 
+        BeginMatchmaking();
+
+        isConnecting = true;
+    }
+
+    private void SocketClosed()
+    {
+        ExecuteInMainThreadCo(ToggleGameObject(LostInternetView, true));
+
+        chatController.isChatHistoryFetched = false;
+        isInternetAvailable = false;
+        isInternetStatusUpdated = true;
+        isConnecting = false;
+    }
+
+    private void SocketConnected()
+    {
+        chatController.ClearChatroomView();
+    }
+
+    private async void Matchmaked(IMatchmakerMatched matchObj)
+    {
+        match = await socket.JoinMatchAsync(matchObj);
+        if (isInternetAvailable == true)
+        {
+            ExecuteInMainThreadCo(ToggleGameObject(LoadingView, false));
+        }
+
+        ExecuteInMainThreadCo(
+            chatController.AssignChatConfiguration(
+                profileModel.username,
+                profileModel.channel,
+                profileModel.region));
+
+        channel = await socket.JoinChatAsync(profileModel.channel, ChannelType.Room, true, false);
+
+        chatController.FetchChatHistory();
+    }
+    
+    private async void BeginMatchmaking()
+    {
         string query =
         "+properties.region:" + profileModel.region + " " +
         "+properties.channel:" + profileModel.channel;
@@ -161,7 +163,11 @@ public class MatchmakerController : MonoBehaviour
         };
 
         ticket = await socket.AddMatchmakerAsync(query, 2, 2, stringProperties);
-        isConnecting = true;
+    }
+
+    private void ExecuteInMainThreadCo(IEnumerator coroutine)
+    {
+        UnityMainThreadDispatcher.Instance().Enqueue(coroutine);
     }
 
     private IEnumerator ToggleGameObject(GameObject obj, bool toggle)

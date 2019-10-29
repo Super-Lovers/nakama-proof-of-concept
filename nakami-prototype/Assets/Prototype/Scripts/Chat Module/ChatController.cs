@@ -8,18 +8,20 @@ using UnityEngine.UI;
 
 public class ChatController : MonoBehaviour
 {
+    // Dependancies
+    private MatchmakerController matchController = null;
+
     [SerializeField] private TextMeshProUGUI usernameLabel = null;
     [SerializeField] private TextMeshProUGUI channelTitle = null;
     [SerializeField] private TextMeshProUGUI regionLabel = null;
     [SerializeField] private TMP_InputField inputMessageField = null;
 
-    public GameObject messagePrefab = null;
-    public GameObject notificationPrefab = null;
-    public RectTransform messagesContentView = null;
+    [SerializeField] private GameObject messagePrefab = null;
+    [SerializeField] private GameObject notificationPrefab = null;
+    [SerializeField] private RectTransform messagesContentView = null;
 
     private bool isStorageDataRestored = true;
     public bool isChatHistoryFetched = false;
-    private MatchmakerController matchController = null;
     List<(string, string, bool)> unreceivedMessages = new List<(string, string, bool)>();
 
     private void Start()
@@ -27,6 +29,13 @@ public class ChatController : MonoBehaviour
         matchController = FindObjectOfType<MatchmakerController>();
     }
 
+    /// <summary>
+    /// Assigns chat channel title, username and region fields when chat is initialized.
+    /// </summary>
+    /// <param name="username"></param>
+    /// <param name="channel"></param>
+    /// <param name="region"></param>
+    /// <returns></returns>
     public IEnumerator AssignChatConfiguration(
         string username,
         string channel,
@@ -52,7 +61,7 @@ public class ChatController : MonoBehaviour
         {
             foreach (GameObject message in messages)
             {
-                UnityMainThreadDispatcher.Instance().Enqueue(DestroyCo(message));
+                ExecuteInMainThreadCo(DestroyCo(message));
             }
         }
     }
@@ -63,7 +72,10 @@ public class ChatController : MonoBehaviour
         yield return null;
     }
 
-    public void SendUnreceivedMessages()
+    /// <summary>
+    /// Clears the chatview, fetches the channel's chat history and creates it in the chat view.
+    /// </summary>
+    public void PushUnreceivedMessages()
     {
         if (isChatHistoryFetched == false)
         {
@@ -82,6 +94,9 @@ public class ChatController : MonoBehaviour
         }
     }
 
+    /// <summary>
+    /// Sends the message currently in the input text field on the chat view to that channel in the nakama server or locally depending on the internet connection status.
+    /// </summary>
     public void SendMessage()
     {
         if (matchController.GetInternetStatus() == true)
@@ -94,9 +109,7 @@ public class ChatController : MonoBehaviour
             }
             else if (isStorageDataRestored == false)
             {
-                // TODO: Fetch storage
-
-                SendUnreceivedMessages();
+                PushUnreceivedMessages();
             }
         }
         else
@@ -104,28 +117,32 @@ public class ChatController : MonoBehaviour
             isStorageDataRestored = false;
             var messageTuple = (usernameLabel.text, inputMessageField.text, false);
             unreceivedMessages.Add(messageTuple);
-            UnityMainThreadDispatcher.Instance().Enqueue(CreateMessage(messageTuple.Item1, messageTuple.Item2));
+
+            ExecuteInMainThreadCo(CreateMessage(messageTuple.Item1, messageTuple.Item2));
             inputMessageField.text = string.Empty;
-            Debug.Log("message sent with net off");
+
+            if (matchController.DebugMode == true)
+            {
+                Debug.Log("Message sent with net off");
+            }
         }
     }
 
     public void RebuildLayout()
     {
-        // Lovely
-        LayoutRebuilder.ForceRebuildLayoutImmediate(messagesContentView);
-        LayoutRebuilder.ForceRebuildLayoutImmediate(messagesContentView);
-        LayoutRebuilder.ForceRebuildLayoutImmediate(messagesContentView);
-        LayoutRebuilder.ForceRebuildLayoutImmediate(messagesContentView);
+        for (int i = 0; i < 3; i++)
+        {
+            LayoutRebuilder.ForceRebuildLayoutImmediate(messagesContentView);
+        }
     }
 
     public async void FetchChatHistory()
     {
-        var history = await matchController.GetClient().ListChannelMessagesAsync(matchController.GetSession(), matchController.GetChannel().Id, 100, true);
+        IApiChannelMessageList history = await matchController.GetClient().ListChannelMessagesAsync(matchController.GetSession(), matchController.GetChannel().Id, 100, true);
 
         foreach (IApiChannelMessage message in history.Messages)
         {
-            UnityMainThreadDispatcher.Instance().Enqueue(CreateMessage(message));
+            ExecuteInMainThreadCo(CreateMessage(message));
         }
     }
 
@@ -141,6 +158,11 @@ public class ChatController : MonoBehaviour
             .WriteChatMessageAsync(MatchmakerController.channel.Id, content);
     }
 
+    /// <summary>
+    /// Creates a message object in the chat view based on the IApiChannelMessage object content.
+    /// </summary>
+    /// <param name="message"></param>
+    /// <returns></returns>
     public IEnumerator CreateMessage(IApiChannelMessage message)
     {
         GameObject messageObj = Instantiate(messagePrefab);
@@ -162,10 +184,17 @@ public class ChatController : MonoBehaviour
         {
             messageController.SetReceivedStatus(false);
         }
+
         RebuildLayout();
         yield return null;
     }
 
+    /// <summary>
+    /// Creates a message object in the chat view based on a message sent while the client had no connection to the server and is therefore not able to process a IApiChannelMessage.
+    /// </summary>
+    /// <param name="name"></param>
+    /// <param name="text"></param>
+    /// <returns></returns>
     public IEnumerator CreateMessage(string name, string text)
     {
         GameObject messageObj = Instantiate(messagePrefab);
@@ -182,10 +211,16 @@ public class ChatController : MonoBehaviour
         {
             messageController.SetReceivedStatus(false);
         }
+
         RebuildLayout();
         yield return null;
     }
 
+    /// <summary>
+    /// Creates a message object in the chat view that only takes a string without a username. Useful for broadcast messages.
+    /// </summary>
+    /// <param name="message"></param>
+    /// <returns></returns>
     public IEnumerator CreateNotification(string message)
     {
         GameObject messageObj = Instantiate(notificationPrefab);
@@ -195,5 +230,10 @@ public class ChatController : MonoBehaviour
         messageController.SetMessage(message);
         RebuildLayout();
         yield return null;
+    }
+
+    private void ExecuteInMainThreadCo(IEnumerator coroutine)
+    {
+        UnityMainThreadDispatcher.Instance().Enqueue(coroutine);
     }
 }
